@@ -1,0 +1,4 @@
+modules:
+  tcp:
+    prober: tcp
+    timeout: 3s

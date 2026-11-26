@@ -1,0 +1,68 @@
+{
+  "title": "RAG demo endpoints",
+  "uid": "rag-demo-endpoints",
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Accepting TCP connections (1 = yes)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "rag-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_success{job=\"endpoints\"}",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "Probe duration",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "rag-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_duration_seconds{job=\"endpoints\"}",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    }
+  ]
+}
