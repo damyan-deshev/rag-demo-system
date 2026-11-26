@@ -1,0 +1,29 @@
+services:
+  ragflow-cpu:
+    ports: !override ["127.0.0.1:9380:9380", "127.0.0.1:9388:80"]
+    command: ["--enable-adminserver", "--init-superuser", "--disable-syncer"]
+    depends_on:
+      es01: {condition: service_healthy}
+      kvrocks: {condition: service_healthy}
+      minio: {condition: service_healthy}
+      nats: {condition: service_healthy}
+  mysql:
+    ports: !reset []
+  minio:
+    ports: !reset []
+  es01:
+    ports: !reset []
+    environment:
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+  kvrocks:
+    ports: !reset []
+  nats:
+    ports: !reset []
+  ollama:
+    profiles: [models]
+    image: ollama/ollama:0.12.6
+    ports: ["127.0.0.1:11435:11434"]
+    volumes: [models:/root/.ollama]
+    networks: [ragflow]
+volumes:
+  models: {}

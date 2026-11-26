@@ -4,16 +4,27 @@
 
 ## Първо пускане
 
-Трябват Python 3.10+, работещ RAGFlow с API ключ за твоя акаунт и регистриран embedding модел. За чат ти трябва и LLM сървър с OpenAI-съвместими `/v1/models` и `/v1/chat/completions`. Клиентът е проверен с Go API на [RAGFlow v1.0.0](https://github.com/infiniflow/ragflow/tree/db1cd5929a7885a3074547791f5ecc4d2f891739). За собствен backend виж [инструкциите на RAGFlow](https://github.com/infiniflow/ragflow/tree/db1cd5929a7885a3074547791f5ecc4d2f891739/docker).
+На чиста машина инсталирай Git, Python 3.10+ с `venv` и Docker Engine или Docker Desktop с работещ Docker Compose 2.24.4+. Първият старт сваля образи и модели. За RAGFlow upstream препоръчва 4 CPU ядра, 16 GB RAM и 50 GB свободен диск. При Docker Desktop задели ресурсите за Docker VM. [Изисквания на RAGFlow](https://github.com/infiniflow/ragflow/tree/db1cd5929a7885a3074547791f5ecc4d2f891739#-local-deployment)
 
 ```sh
 git clone https://github.com/damyan-deshev/rag-demo-system.git
 cd rag-demo-system
-export RAGFLOW_API_KEY='YOUR_RAGFLOW_API_KEY'
-./demo
+./demo up
 ```
 
-При първо пускане wizard-ът пита за адреса на RAGFlow (до корена на API сървъра) и показва embedding моделите, регистрирани в акаунта. След това пита за адреса на LLM (включително `/v1`) и показва наличните модели. Ако LLM сървърът изисква ключ, задай и `LLM_API_KEY`. Можеш да въведеш ID ръчно, да пропуснеш настройката с `n` или `./demo --skip-wizard` и да се върнеш с `w`. Адресите и имената се запазват локално. Ключовете идват от средата.
+Една команда клонира фиксираната версия на RAGFlow в `.local-stack/ragflow`, стартира услугите, сваля CPU моделите, създава учебен акаунт, издава API ключ и регистрира моделите. След това отвори терминалния урок с `./demo`. Първа проба: `n` → име на колекция → `i` → `examples/station.txt` → `c` → **When did Aurora open?** Показаните източници трябва да съдържат 1984.
+
+Ако искаш да избереш конфигурацията, стартирай директно **`./demo`** след клонирането. Wizard-ът предлага три пътя:
+
+| Избор | Услуги и удостоверяване |
+|---|---|
+| **1. Всичко локално** | Същият стек като `./demo up`. RAGFlow, MySQL, Elasticsearch, Silo, Kvrocks и NATS работят в Docker. Ollama обслужва `nomic-embed-text` за вектори и `qwen2.5:1.5b` за чат. Prometheus и Grafana показват достъпността на услугите. |
+| **2. Локален RAGFlow + съществуващ gateway** | Клонира и стартира RAGFlow, създава акаунт и ключ. Даваш OpenAI-съвместим URL и ключ при нужда. От списъка на gateway-а избираш един embedding модел и един LLM. Wizard-ът регистрира избраните модели в локалния RAGFlow. |
+| **3. Съществуващ RAGFlow и LLM** | Въвеждаш URL и ключ за работещия RAGFlow и избираш измежду вече регистрираните му embedding модели. За чат даваш OpenAI-съвместим URL и избираш модел. Този режим изисква само Python и достъп до услугите. |
+
+При режим 2 gateway-ът трябва да е достъпен и от терминала, и от контейнера на RAGFlow. За gateway на същия компютър wizard-ът предлага `host.docker.internal` като адрес за контейнера. За gateway в мрежата въведи неговия достъпен DNS адрес. Ключовете се запазват локално по услуга и адрес във файл с права `0600`. Клиентът приема и `RAGFLOW_API_KEY` и `LLM_API_KEY` от средата.
+
+`./demo --skip-wizard` използва наличните настройки, а `w` отваря избора отново. `./demo stack-logs` показва последните записи от RAGFlow. `./demo stop` спира локалните контейнери и запазва томовете. Повтори `./demo up` за изцяло локалния режим или избери отново режим 2 за gateway. Оригиналният код на RAGFlow остава достъпен в `.local-stack/ragflow`, а отделното копие за разгръщане е в `.local-stack/docker`. [RAGFlow v1.0.0](https://github.com/infiniflow/ragflow/tree/db1cd5929a7885a3074547791f5ecc4d2f891739)
 
 За предварително настроена среда:
 
@@ -105,7 +116,7 @@ flowchart TD
 
 ## Grafana
 
-По желание можеш да покажеш на проектор достъпността на двата сървъра. В `monitoring/prometheus.yml` задай адресите на RAGFlow и LLM, видими от контейнера за проверки. При настройките по подразбиране той се свързва към портове 9380 и 1234 на Docker хоста.
+Локалните режими отварят [готовия dashboard](http://localhost:3300/d/rag-demo-endpoints) след стартиране. При съществуващи услуги можеш да покажеш на проектор достъпността на двата сървъра. В `monitoring/prometheus.yml` задай адресите на RAGFlow и LLM, видими от контейнера за проверки. При настройките по подразбиране той се свързва към портове 9380 и 1234 на Docker хоста.
 
 ```sh
 docker compose -f monitoring/compose.yaml up -d
