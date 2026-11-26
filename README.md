@@ -2,6 +2,16 @@
 
 Терминален урок по retrieval-augmented generation (RAG). Качваш свой документ, следиш как се индексира, задаваш въпрос и виждаш точните откъси, от които езиковият модел съставя отговора. Можеш да изпълниш всеки етап в отделен терминал.
 
+## Подготовка на терминала
+
+Урокът използва едни и същи команди в Ubuntu под Windows, Terminal на macOS и Linux терминал. Избери своята среда, след което продължи към „Първо пускане“.
+
+- **Windows** — отвори PowerShell като администратор и изпълни `wsl --install -d Ubuntu`. След рестарта отвори Ubuntu и създай потребител. За локалния стек стартирай Docker Desktop за Windows, включи WSL 2 engine и избери Ubuntu в **Settings → Resources → WSL Integration**. В Ubuntu изпълни `sudo apt update && sudo apt install -y git python3 python3-venv`, после `cd ~` и клонирай проекта там. Файл от Windows Downloads можеш да избереш през `/mnt/c/Users/<име>/Downloads/`. [Microsoft WSL](https://learn.microsoft.com/en-us/windows/wsl/install) · [Docker WSL integration](https://docs.docker.com/desktop/features/wsl/)
+- **macOS** — отвори Terminal. Подготви Git и Python 3.10+ и стартирай Docker Desktop за Mac за локалния стек.
+- **Linux** — отвори терминала. Подготви Git и Python 3.10+ с `venv`. За локалния стек стартирай Docker Engine с Compose plugin или Docker Desktop.
+
+Провери с `python3 --version`. За локалните режими изпълни също `docker info` и `docker compose version` в същия терминал. При ползване само на съществуващи услуги е достатъчна клиентската среда с Git и Python.
+
 ## Първо пускане
 
 На чиста машина инсталирай Git, Python 3.10+ с `venv` и Docker Engine или Docker Desktop с работещ Docker Compose 2.24.4+. Първият старт сваля образи и модели. За RAGFlow upstream препоръчва 4 CPU ядра, 16 GB RAM и 50 GB свободен диск. При Docker Desktop задели ресурсите за Docker VM. [Изисквания на RAGFlow](https://github.com/infiniflow/ragflow/tree/db1cd5929a7885a3074547791f5ecc4d2f891739#-local-deployment)
