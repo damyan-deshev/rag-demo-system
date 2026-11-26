@@ -44,3 +44,23 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(
             "Use excerpts only", api.complete.await_args.args[0][-1]["content"]
         )
+
+    async def test_independent_retrieval_and_context_limits(self):
+        api = Mock()
+        chunks = [{"id": str(i), "content": "абвгд" + str(i)} for i in range(5)]
+        api.request.return_value = {"chunks": chunks}
+        for count in (2, 0):
+            api.complete = AsyncMock(side_effect=[("original", {}), ("answer", {})])
+            with patch.object(app, "ui") as ui:
+                turn = await app.ask(
+                    api, "book", "original", 1, [], False, count, top_k=5, chunk_chars=3
+                )
+            self.assertEqual(api.request.call_args.kwargs["json"]["page_size"], 5)
+            ui.print.assert_any_call("абвгд4")
+            excerpts = json.loads(api.complete.await_args.args[0][-1]["content"])[
+                "retrieved_excerpts"
+            ]
+            self.assertEqual(excerpts, turn["sources"])
+            self.assertEqual(
+                [block.split("\n")[1] for block in excerpts], ["абв"] * count
+            )

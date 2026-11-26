@@ -238,7 +238,7 @@ def trace(label, color, body):
     ui.print(body)
 
 
-def retrieve(api, ds, query, label):
+def retrieve(api, ds, query, label, top_k):
     trace(label, "cyan", query)
     chunks = api.request(
         "POST",
@@ -246,11 +246,14 @@ def retrieve(api, ds, query, label):
         json={
             "dataset_ids": [ds],
             "question": query,
-            "page_size": 8,
+            "page_size": top_k,
             "include_knowledge_compilation": False,
         },
     )["chunks"]
-    ui.print(f"RAGFlow → harness · {len(chunks)} откъса", style="bold yellow")
+    ui.print(
+        f"RAGFlow → harness · {len(chunks)} откъса (поискани до {top_k})",
+        style="bold yellow",
+    )
     for rank, chunk in enumerate(chunks, 1):
         score = chunk.get("similarity")
         suffix = f" · similarity {score:.3f}" if isinstance(score, (float, int)) else ""
@@ -259,18 +262,40 @@ def retrieve(api, ds, query, label):
     return chunks
 
 
-def source_blocks(chunks):
-    return [
-        f"[S{n}] {c.get('document_name') or c.get('docnm_kw') or c.get('document_keyword') or ''} · {c['id']}\n{c['content']}"
-        for n, c in enumerate(chunks, 1)
-    ]
+def source_blocks(chunks, chunk_chars):
+    blocks = []
+    for n, chunk in enumerate(chunks, 1):
+        original = chunk["content"]
+        text = original[:chunk_chars]
+        name = (
+            chunk.get("document_name")
+            or chunk.get("docnm_kw")
+            or chunk.get("document_keyword")
+            or ""
+        )
+        blocks.append(f"[S{n}] {name} · {chunk['id']}\n{text}")
+        if len(text) < len(original):
+            ui.print(f"[S{n}] · избрани {len(text)} от {len(original)} знака")
+    return blocks
 
 
-async def ask(api, ds, question, limit, history, raw, context_chunks=4, instruction=""):
-    baseline = retrieve(api, ds, question, "Въпрос → RAGFlow · дословна заявка")
+async def ask(
+    api,
+    ds,
+    question,
+    limit,
+    history,
+    raw,
+    context_chunks=4,
+    instruction="",
+    *,
+    top_k=8,
+    chunk_chars=None,
+):
+    baseline = retrieve(api, ds, question, "Въпрос → RAGFlow · дословна заявка", top_k)
     batches = [baseline]
     if raw:
-        blocks = source_blocks(baseline[:context_chunks])
+        blocks = source_blocks(baseline[:context_chunks], chunk_chars)
         trace("Избран контекст", "yellow", "\n\n".join(blocks) or "0 откъса")
         return
 
@@ -295,10 +320,12 @@ async def ask(api, ds, question, limit, history, raw, context_chunks=4, instruct
             ui.print("Заявката съвпада дословно. Използваме вече върнатите откъси.")
             chunks = baseline
         else:
-            chunks = retrieve(api, ds, query, f"Harness → RAGFlow · заявка {i}/{limit}")
+            chunks = retrieve(
+                api, ds, query, f"Harness → RAGFlow · заявка {i}/{limit}", top_k
+            )
             batches.append(chunks)
         picked = fused_candidates(batches, context_chunks)
-        blocks = source_blocks(picked)
+        blocks = source_blocks(picked, chunk_chars)
         context = "\n\n".join(blocks)
         if limit == 1:
             break
@@ -354,7 +381,7 @@ async def ask(api, ds, question, limit, history, raw, context_chunks=4, instruct
     }
 
 
-def chat(api, ds, limit, context_chunks):
+def chat(api, ds, limit, context_chunks, **retrieval_options):
     history, transcript = [], []
     instruction = ""
     ui.print(
@@ -377,7 +404,17 @@ def chat(api, ds, limit, context_chunks):
             )
             continue
         turn = asyncio.run(
-            ask(api, ds, q, limit, history, False, context_chunks, instruction)
+            ask(
+                api,
+                ds,
+                q,
+                limit,
+                history,
+                False,
+                context_chunks,
+                instruction,
+                **retrieval_options,
+            )
         )
         if turn:
             transcript.append(turn)
@@ -392,7 +429,7 @@ def chat(api, ds, limit, context_chunks):
         )
 
 
-def collection(api, ds, limit, context_chunks):
+def collection(api, ds, limit, context_chunks, **retrieval_options):
     base = "/api/v1/datasets/" + ds["id"]
     scope = (api.cfg["ragflow_url"].rstrip("/"), ds["id"])
     ui.print(f"Collection ID · {ds['id']}")
@@ -482,12 +519,21 @@ def collection(api, ds, limit, context_chunks):
                 if input("Delete this conversation? Type DELETE › ") == "DELETE":
                     sessions.delete(scope, ident)
         elif action == "c":
-            chat(api, ds["id"], limit, context_chunks)
+            chat(api, ds["id"], limit, context_chunks, **retrieval_options)
         elif action == "s":
             history = []
             while q := input("Question (Enter to return) › ").strip():
                 asyncio.run(
-                    ask(api, ds["id"], q, limit, history, action == "s", context_chunks)
+                    ask(
+                        api,
+                        ds["id"],
+                        q,
+                        limit,
+                        history,
+                        action == "s",
+                        context_chunks,
+                        **retrieval_options,
+                    )
                 )
 
 
@@ -496,12 +542,28 @@ def main():
     parser.add_argument("--skip-wizard", action="store_true")
     add_pass_option(parser)
     parser.add_argument("--dataset", help="Collection ID for staged commands")
-    parser.add_argument("--context-chunks", type=int, choices=range(1, 9), default=4)
+    parser.add_argument(
+        "--context-chunks",
+        type=int,
+        default=4,
+        help="Maximum distinct excerpts in the model context (0 for none)",
+    )
     parser.add_argument(
         "--chunk-tokens",
         type=int,
         default=160,
         help="Target tokens per chunk for new collections",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=8,
+        help="Maximum results requested per RAGFlow query (page_size)",
+    )
+    parser.add_argument(
+        "--context-chunk-chars",
+        type=int,
+        help="Maximum Unicode characters of source text per selected excerpt (default: full text)",
     )
     stages = parser.add_subparsers(dest="stage")
     stages.add_parser("upload").add_argument("file", type=Path)
@@ -516,6 +578,15 @@ def main():
         parser.error("--dataset ID is required for a staged command")
     if args.chunk_tokens < 1:
         parser.error("--chunk-tokens must be positive")
+    if (
+        args.top_k < 1
+        or args.context_chunks < 0
+        or (args.context_chunk_chars is not None and args.context_chunk_chars < 1)
+    ):
+        parser.error(
+            "--top-k and --context-chunk-chars must be positive; --context-chunks may also be zero"
+        )
+    retrieval_options = dict(top_k=args.top_k, chunk_chars=args.context_chunk_chars)
     with httpx.Client(timeout=180) as client:
         api = Backend(settings(), client)
         if args.stage == "up":
@@ -573,10 +644,17 @@ def main():
                         [],
                         True,
                         args.context_chunks,
+                        **retrieval_options,
                     )
                 )
             else:
-                chat(api, args.dataset, args.max_passes, args.context_chunks)
+                chat(
+                    api,
+                    args.dataset,
+                    args.max_passes,
+                    args.context_chunks,
+                    **retrieval_options,
+                )
             return
         while True:
             cmd = input(
@@ -604,12 +682,24 @@ def main():
                                 "/api/v1/datasets/" + ds["id"],
                                 json={"parser_config": config},
                             )
-                        collection(api, ds, args.max_passes, args.context_chunks)
+                        collection(
+                            api,
+                            ds,
+                            args.max_passes,
+                            args.context_chunks,
+                            **retrieval_options,
+                        )
                 if cmd == "o":
                     rows = api.listing("/api/v1/datasets", "datasets")
                     ds = choose([(r["name"], r) for r in rows], "Collection")
                     if ds:
-                        collection(api, ds, args.max_passes, args.context_chunks)
+                        collection(
+                            api,
+                            ds,
+                            args.max_passes,
+                            args.context_chunks,
+                            **retrieval_options,
+                        )
             except (httpx.HTTPError, ValueError, OSError, KeyError) as e:
                 ui.print(f"Operation failed · {e}")
 
